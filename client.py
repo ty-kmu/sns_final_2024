@@ -60,8 +60,14 @@ class DrawingClient:
         self.chat_frame = tk.Frame(self.root)
         self.chat_frame.pack(side=tk.RIGHT, padx=5)
 
-        self.chat_box = tk.Text(self.chat_frame, height=20, width=30)
+        self.chat_box = tk.Text(self.chat_frame, height=20, width=30, wrap="word")
+        self.chat_box.config(state="disabled")
         self.chat_box.pack()
+        
+        # 위치 설정
+        self.chat_box.tag_configure("left", justify="left", foreground="black")
+        self.chat_box.tag_configure("right", justify="right", foreground="grey")
+        self.chat_box.tag_configure("center", justify="center", foreground="blue")
 
         self.msg_frame = tk.Frame(self.chat_frame)
         self.msg_frame.pack(fill=tk.X, padx=5)
@@ -85,7 +91,7 @@ class DrawingClient:
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
     def process_message_queue(self):
-        """메시지 큐 처리"""
+        # 메시지 큐 처리
         try:
             while not self.message_queue.empty():
                 data = self.message_queue.get_nowait()
@@ -102,8 +108,17 @@ class DrawingClient:
                             splinesteps=36
                         )
                     elif data['type'] == 'chat':
-                        self.chat_box.insert(tk.END, data['message'] + '\n')
+                        self.chat_box.config(state="normal")
+                        self.chat_box.insert(tk.END, data['message'] + '\n', 'left')
+                        self.chat_box.config(state="disabled")
                         self.chat_box.see(tk.END)
+                    elif data['type'] == 'join_exit':
+                        self.chat_box.config(state="normal")
+                        self.chat_box.insert(tk.END, data['message'] + '\n', 'center')
+                        self.chat_box.config(state="disabled")
+                        self.chat_box.see(tk.END)
+                    elif data['type'] == 'clear':
+                        self.clear_canvas()
                 else:
                     self.chat_box.insert(tk.END, str(data) + '\n')
                     self.chat_box.see(tk.END)
@@ -113,7 +128,7 @@ class DrawingClient:
             self.root.after(10, self.process_message_queue)
 
     def clear_canvas(self):
-        #    캔버스 지우기
+        # 캔버스 지우기
         self.canvas.delete("all")
         data = {
             'type': 'clear'
@@ -214,7 +229,9 @@ class DrawingClient:
                 self.client.send(json.dumps(data).encode('utf-8'))
 
                 # 내 화면에도 즉시 표시
-                self.chat_box.insert(tk.END, data['message'] + '\n')
+                self.chat_box.config(state="normal")
+                self.chat_box.insert(tk.END, message + '\n', 'right')
+                self.chat_box.config(state="disabled")
                 self.chat_box.see(tk.END)
 
                 # 입력창 비우기

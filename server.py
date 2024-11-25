@@ -29,7 +29,13 @@ class DrawingServer:
             client.close()
             nickname = self.nicknames[index]
             self.nicknames.remove(nickname)
-            self.broadcast(f"{nickname}님이 퇴장하셨습니다.".encode('utf-8'))
+
+            exit_message = {
+                    'type': 'join_exit',
+                    'message': f"{nickname}님이 퇴장하셨습니다."
+                }
+            self.broadcast(json.dumps(exit_message).encode('utf-8'))
+            
             print(f"{nickname} 연결 종료")
 
     def handle_client(self, client, nickname):
@@ -49,6 +55,7 @@ class DrawingServer:
                 self.remove_client(client)
                 break
 
+
     def start(self):
         while True:
             try:
@@ -58,14 +65,14 @@ class DrawingServer:
                 # 닉네임 요청
                 client.send('NICK'.encode('utf-8'))
                 nickname = client.recv(1024).decode('utf-8')
-
-                self.nicknames.append(nickname)
+                
                 self.clients.append(client)
+                self.nicknames.append(nickname)
 
                 # 입장 메시지 브로드캐스트
                 print(f"닉네임: {nickname}")
                 join_message = {
-                    'type': 'chat',
+                    'type': 'join_exit',
                     'message': f"{nickname}님이 입장하셨습니다!"
                 }
                 self.broadcast(json.dumps(join_message).encode('utf-8'))
