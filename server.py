@@ -133,31 +133,6 @@ class DrawingServer:
                 print(f"[DEBUG] 트리뷰에 항목 추가됨: {item_id}")
                 self.tree.see(item_id)  # 새로 추가된 항목을 보이게 함
                 self.count_label.config(text=f"현재 접속자 수: {len(self.clients)}명")
-
-                client, address = self.server.accept()
-                print(f"새로운 연결: {str(address)}")
-
-                # 닉네임 요청
-                client.send('NICK'.encode('utf-8'))
-                nickname = client.recv(1024).decode('utf-8')
-
-                self.clients.append(client)
-                self.nicknames.append(nickname)
-
-                # 입장 메시지 브로드캐스트
-                print(f"닉네임: {nickname}")
-                join_message = {
-                    'type': 'join_exit',
-                    'message': f"{nickname}님이 입장하셨습니다"
-                }
-                self.broadcast(json.dumps(join_message).encode('utf-8'))
-
-                # 클라이언트 처리 스레드 시작
-                thread = threading.Thread(
-                    target=self.handle_client, args=(client, nickname))
-                thread.daemon = True
-                thread.start()
-
             except Exception as e:
                 print(f"[ERROR] 트리뷰 업데이트 중 오류 발생: {str(e)}")
                 import traceback
