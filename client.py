@@ -65,9 +65,9 @@ class DrawingClient:
         self.chat_box.pack()
         
         # 위치 설정
-        self.chat_box.tag_configure("left", justify="left", foreground="black")
-        self.chat_box.tag_configure("right", justify="right", foreground="grey")
-        self.chat_box.tag_configure("center", justify="center", foreground="blue")
+        self.chat_box.tag_configure("left", justify="left", foreground="grey", spacing1=3)
+        self.chat_box.tag_configure("right", justify="right", foreground="black", spacing1=3)
+        self.chat_box.tag_configure("center", justify="center", foreground="blue", spacing1=3)
 
         self.msg_frame = tk.Frame(self.chat_frame)
         self.msg_frame.pack(fill=tk.X, padx=5)

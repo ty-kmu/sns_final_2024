@@ -32,7 +32,7 @@ class DrawingServer:
 
             exit_message = {
                     'type': 'join_exit',
-                    'message': f"{nickname}님이 퇴장하셨습니다."
+                    'message': f"{nickname}님이 퇴장하셨습니다"
                 }
             self.broadcast(json.dumps(exit_message).encode('utf-8'))
             
@@ -73,7 +73,7 @@ class DrawingServer:
                 print(f"닉네임: {nickname}")
                 join_message = {
                     'type': 'join_exit',
-                    'message': f"{nickname}님이 입장하셨습니다!"
+                    'message': f"{nickname}님이 입장하셨습니다"
                 }
                 self.broadcast(json.dumps(join_message).encode('utf-8'))
 
