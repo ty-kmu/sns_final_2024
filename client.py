@@ -60,14 +60,17 @@ class DrawingClient:
         self.chat_frame = tk.Frame(self.root)
         self.chat_frame.pack(side=tk.RIGHT, padx=5)
 
-        self.chat_box = tk.Text(self.chat_frame, height=20, width=30, wrap="word")
+        self.chat_box = tk.Text(
+            self.chat_frame, height=20, width=30, wrap="word")
         self.chat_box.config(state="disabled")
         self.chat_box.pack()
-        
+
         # 위치 설정
         self.chat_box.tag_configure("left", justify="left", foreground="black")
-        self.chat_box.tag_configure("right", justify="right", foreground="grey")
-        self.chat_box.tag_configure("center", justify="center", foreground="blue")
+        self.chat_box.tag_configure(
+            "right", justify="right", foreground="grey")
+        self.chat_box.tag_configure(
+            "center", justify="center", foreground="blue")
 
         self.msg_frame = tk.Frame(self.chat_frame)
         self.msg_frame.pack(fill=tk.X, padx=5)
@@ -109,12 +112,14 @@ class DrawingClient:
                         )
                     elif data['type'] == 'chat':
                         self.chat_box.config(state="normal")
-                        self.chat_box.insert(tk.END, data['message'] + '\n', 'left')
+                        self.chat_box.insert(
+                            tk.END, data['message'] + '\n', 'left')
                         self.chat_box.config(state="disabled")
                         self.chat_box.see(tk.END)
                     elif data['type'] == 'join_exit':
                         self.chat_box.config(state="normal")
-                        self.chat_box.insert(tk.END, data['message'] + '\n', 'center')
+                        self.chat_box.insert(
+                            tk.END, data['message'] + '\n', 'center')
                         self.chat_box.config(state="disabled")
                         self.chat_box.see(tk.END)
                     elif data['type'] == 'clear':
