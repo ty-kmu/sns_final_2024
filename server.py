@@ -78,8 +78,6 @@ class DrawingServer:
     def update_tree(self, nickname):
         try:
             for item in self.tree.get_children():
-                print(self.tree.item(item)['values'])
-                print(self.tree.item(item)['values'][0])
                 if self.tree.item(item)['values'][0] == nickname:
                     # 상태를 '종료됨'으로 변경 후 잠시 대기했다가 삭제
                     self.tree.set(item, "상태", "종료됨")
@@ -91,11 +89,9 @@ class DrawingServer:
         except Exception as e:
             print(f"트리뷰 업데이트 중 오류: {e}")
 
-
     def remove_client(self, client, nickname):
         try:
             if client in self.clients:
-                index = self.clients.index(client)
                 self.clients.remove(client)
                 self.nicknames.remove(nickname)
 
@@ -128,7 +124,7 @@ class DrawingServer:
 
                 data = json.loads(message)
                 if data['type'] == 'exit':
-                    # 클라이언트 종료 처리
+                    self.remove_client(client, nickname)
                     break
 
                 # 다른 메시지 처리...
@@ -140,9 +136,6 @@ class DrawingServer:
             except Exception as e:
                 print(f"클라이언트 처리 중 오류 발생: {e}")
                 break
-
-        # 클라이언트 연결 종료 처리
-        self.remove_client(client, nickname)
 
     def start(self):
         self.root.after(100, self.accept_connections)
@@ -209,7 +202,7 @@ class DrawingServer:
             self.root.after(100, self.accept_connections)
 
     def check_connections(self):
-        """주기적으로 모든 클라이언트의 연결 상태를 확인"""
+        # 주기적으로 모든 클라이언트의 연결 상태를 확인
         try:
             for item in self.tree.get_children():
                 values = self.tree.item(item)['values']
