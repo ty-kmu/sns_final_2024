@@ -75,28 +75,31 @@ class DrawingServer:
                 except:
                     self.remove_client(client)
 
+    def update_tree(self, client, nickname):
+        print(f"업데이트 트리뷰 호출됨: {nickname}")
+        try:
+            print(f"tree children: {self.tree.get_children()}")
+            for item in self.tree.get_children():
+                if self.tree.item(item)['values'][0] == nickname:
+                    print("조건만족")
+                    self.tree.set(item, "상태", "끊김")
+                    self.root.after(
+                        2000, lambda: self.tree.delete(item))
+                    break
+            self.count_label.config(
+                text=f"현재 접속자 수: {len(self.clients)}명")
+        except Exception as e:
+            print(f"트리뷰 업데이트 중 오류: {e}")
+
     def remove_client(self, client, nickname):
         try:
+            print(f"클라이언트 제거함수 호출: {client} {nickname}")
             if client in self.clients:
                 index = self.clients.index(client)
-                self.clients.remove(client)
-                self.nicknames.remove(nickname)
 
-                def update_tree():
-                    try:
-                        for item in self.tree.get_children():
-                            if self.tree.item(item)['values'][0] == nickname:
-                                # 상태를 '종료됨'으로 변경 후 잠시 대기했다가 삭제
-                                self.tree.set(item, "상태", "종료됨")
-                                self.root.after(
-                                    2000, lambda: self.tree.delete(item))
-                                break
-                        self.count_label.config(
-                            text=f"현재 접속자 수: {len(self.clients)}명")
-                    except Exception as e:
-                        print(f"트리뷰 업데이트 중 오류: {e}")
-
-                self.root.after_idle(update_tree)
+                self.root.after_idle(self.update_tree(client, nickname))
+                del self.clients[index]
+                del self.nicknames[index]
 
                 # 퇴장 메시지 브로드캐스트
                 exit_message = {
@@ -126,6 +129,7 @@ class DrawingServer:
                 data = json.loads(message)
                 if data['type'] == 'exit':
                     # 클라이언트 종료 처리
+                    print(f"{nickname} 클라이언트 종료 요청")
                     break
 
                 # 다른 메시지 처리...
@@ -206,7 +210,6 @@ class DrawingServer:
             self.root.after(100, self.accept_connections)
 
     def check_connections(self):
-        """주기적으로 모든 클라이언트의 연결 상태를 확인"""
         try:
             for item in self.tree.get_children():
                 values = self.tree.item(item)['values']
@@ -220,9 +223,10 @@ class DrawingServer:
                         client.send(b'')
                         self.tree.set(item, "상태", "연결됨")
                     except:
+                        # 연결이 끊긴 상태로 설정
                         self.tree.set(item, "상태", "끊김")
-                        # 연결이 끊어진 클라이언트 제거
-                        self.remove_client(client, nickname)
+                        self.root.after_idle(
+                            self.remove_client, client, nickname)
         except Exception as e:
             print(f"연결 상태 확인 중 오류: {e}")
 

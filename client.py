@@ -53,7 +53,7 @@ class DrawingClient:
         self.color_button.pack(side=tk.LEFT, padx=5)
 
         self.clear_button = tk.Button(
-            self.tool_frame, text="지우기", command=self.clear_canvas)
+            self.tool_frame, text="지우기", command=self.send_clear_canvas)
         self.clear_button.pack(side=tk.LEFT, padx=5)
 
         # 채팅 프레임
@@ -132,13 +132,15 @@ class DrawingClient:
         finally:
             self.root.after(10, self.process_message_queue)
 
-    def clear_canvas(self):
-        # 캔버스 지우기
-        self.canvas.delete("all")
+    def send_clear_canvas(self):
         data = {
             'type': 'clear'
         }
         self.send_data(data)
+
+    def clear_canvas(self):
+        # 캔버스 지우기
+        self.canvas.delete("all")
 
     def send_data(self, data):
         # 데이터 전송
