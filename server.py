@@ -74,6 +74,23 @@ class DrawingServer:
                     client.send(message)
                 except:
                     self.remove_client(client)
+    
+    def update_tree(self, nickname):
+        try:
+            for item in self.tree.get_children():
+                print(self.tree.item(item)['values'])
+                print(self.tree.item(item)['values'][0])
+                if self.tree.item(item)['values'][0] == nickname:
+                    # 상태를 '종료됨'으로 변경 후 잠시 대기했다가 삭제
+                    self.tree.set(item, "상태", "종료됨")
+                    self.root.after(
+                        2000, lambda: self.tree.delete(item))
+                    break
+                self.count_label.config(
+                            text=f"현재 접속자 수: {len(self.clients)}명")
+        except Exception as e:
+            print(f"트리뷰 업데이트 중 오류: {e}")
+
 
     def remove_client(self, client, nickname):
         try:
@@ -82,21 +99,7 @@ class DrawingServer:
                 self.clients.remove(client)
                 self.nicknames.remove(nickname)
 
-                def update_tree():
-                    try:
-                        for item in self.tree.get_children():
-                            if self.tree.item(item)['values'][0] == nickname:
-                                # 상태를 '종료됨'으로 변경 후 잠시 대기했다가 삭제
-                                self.tree.set(item, "상태", "종료됨")
-                                self.root.after(
-                                    2000, lambda: self.tree.delete(item))
-                                break
-                        self.count_label.config(
-                            text=f"현재 접속자 수: {len(self.clients)}명")
-                    except Exception as e:
-                        print(f"트리뷰 업데이트 중 오류: {e}")
-
-                self.root.after_idle(update_tree)
+                self.root.after_idle(self.update_tree(nickname))
 
                 # 퇴장 메시지 브로드캐스트
                 exit_message = {
