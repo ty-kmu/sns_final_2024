@@ -29,11 +29,13 @@ class DrawingServer:
 
         # 접속자 목록 트리뷰
         self.tree = ttk.Treeview(frame, columns=(
-            "닉네임", "접속시간"), show="headings", height=10)
+            "닉네임", "접속시간", "상태"), show="headings", height=10)
         self.tree.heading("닉네임", text="닉네임")
         self.tree.heading("접속시간", text="접속시간")
+        self.tree.heading("상태", text="상태")
         self.tree.column("닉네임", width=100)
         self.tree.column("접속시간", width=150)
+        self.tree.column("상태", width=80)
         self.tree.pack(padx=5, pady=5, fill="both", expand=True)
 
         # 스크롤바 추가
@@ -57,6 +59,9 @@ class DrawingServer:
         # 주기적으로 GUI 업데이트
         self.update_labels()
 
+        # 상태 체크 타이머 시작
+        self.check_connections()
+
     def update_labels(self):
         # 주기적으로 레이블 업데이트
         self.count_label.config(text=f"현재 접속자 수: {len(self.clients)}명")
@@ -70,53 +75,71 @@ class DrawingServer:
                 except:
                     self.remove_client(client)
 
-    def remove_client(self, client):
-        if client in self.clients:
-            index = self.clients.index(client)
-            nickname = self.nicknames[index]
+    def remove_client(self, client, nickname):
+        try:
+            if client in self.clients:
+                index = self.clients.index(client)
+                self.clients.remove(client)
+                self.nicknames.remove(nickname)
 
-            def update_tree():
+                def update_tree():
+                    try:
+                        for item in self.tree.get_children():
+                            if self.tree.item(item)['values'][0] == nickname:
+                                # 상태를 '종료됨'으로 변경 후 잠시 대기했다가 삭제
+                                self.tree.set(item, "상태", "종료됨")
+                                self.root.after(
+                                    2000, lambda: self.tree.delete(item))
+                                break
+                        self.count_label.config(
+                            text=f"현재 접속자 수: {len(self.clients)}명")
+                    except Exception as e:
+                        print(f"트리뷰 업데이트 중 오류: {e}")
+
+                self.root.after_idle(update_tree)
+
+                # 퇴장 메시지 브로드캐스트
+                exit_message = {
+                    'type': 'join_exit',
+                    'message': f"{nickname}님이 퇴장하셨습니다."
+                }
+                self.broadcast(json.dumps(exit_message).encode('utf-8'))
+
+                # 소켓 종료
                 try:
-                    for item in self.tree.get_children():
-                        if self.tree.item(item)['values'][0] == nickname:
-                            self.tree.delete(item)
-                            self.tree.update()  # 트리뷰 강제 업데이트
-                            break
-                    self.count_label.config(
-                        text=f"현재 접속자 수: {len(self.clients)-1}명")
-                except Exception as e:
-                    print(f"트리뷰 제거 중 오류: {e}")
+                    client.shutdown(socket.SHUT_RDWR)
+                except:
+                    pass
+                finally:
+                    client.close()
 
-            # GUI 스레드에서 실행되도록 보장
-            self.root.after(0, update_tree)
-
-            self.clients.remove(client)
-            client.close()
-            self.nicknames.remove(nickname)
-
-            exit_message = {
-                'type': 'join_exit',
-                'message': f"{nickname}님이 퇴장하셨습니다."
-            }
-            self.broadcast(json.dumps(exit_message).encode('utf-8'))
-            print(f"{nickname} 연결 종료")
+        except Exception as e:
+            print(f"클라이언트 제거 중 오류 발생: {e}")
 
     def handle_client(self, client, nickname):
         while True:
             try:
-                message = client.recv(1024)
+                message = client.recv(1024).decode('utf-8')
                 if not message:
                     break
 
-                data = json.loads(message.decode('utf-8'))
-                if data['type'] in ['line', 'chat', 'clear']:
-                    self.broadcast(message, client)
+                data = json.loads(message)
+                if data['type'] == 'exit':
+                    # 클라이언트 종료 처리
+                    break
+
+                # 다른 메시지 처리...
+                self.broadcast(message.encode('utf-8'))
 
             except json.JSONDecodeError:
-                self.broadcast(message)
-            except:
-                self.remove_client(client)
+                print(f"JSON 디코딩 오류: {message}")
+                continue
+            except Exception as e:
+                print(f"클라이언트 처리 중 오류 발생: {e}")
                 break
+
+        # 클라이언트 연결 종료 처리
+        self.remove_client(client, nickname)
 
     def start(self):
         self.root.after(100, self.accept_connections)
@@ -128,17 +151,16 @@ class DrawingServer:
         def update():
             try:
                 current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                item_id = self.tree.insert(
-                    "", "end", values=(nickname, current_time))
+                item_id = self.tree.insert("", "end",
+                                           values=(nickname, current_time, "연결됨"))
                 print(f"[DEBUG] 트리뷰에 항목 추가됨: {item_id}")
-                self.tree.see(item_id)  # 새로 추가된 항목을 보이게 함
+                self.tree.see(item_id)
                 self.count_label.config(text=f"현재 접속자 수: {len(self.clients)}명")
             except Exception as e:
                 print(f"[ERROR] 트리뷰 업데이트 중 오류 발생: {str(e)}")
                 import traceback
                 traceback.print_exc()
 
-        # GUI 업데이트를 메인 스레드에서 실행하도록 보장
         if not hasattr(self, 'root') or not self.root.winfo_exists():
             print("[ERROR] GUI가 초기화되지 않았거나 이미 종료됨")
             return
@@ -183,7 +205,33 @@ class DrawingServer:
             # 다음 연결 확인을 위해 재귀적으로 호출
             self.root.after(100, self.accept_connections)
 
+    def check_connections(self):
+        """주기적으로 모든 클라이언트의 연결 상태를 확인"""
+        try:
+            for item in self.tree.get_children():
+                values = self.tree.item(item)['values']
+                nickname = values[0]
+                if nickname in self.nicknames:
+                    index = self.nicknames.index(nickname)
+                    client = self.clients[index]
+
+                    try:
+                        # 연결 상태 확인을 위한 더미 데이터 전송
+                        client.send(b'')
+                        self.tree.set(item, "상태", "연결됨")
+                    except:
+                        self.tree.set(item, "상태", "끊김")
+                        # 연결이 끊어진 클라이언트 제거
+                        self.remove_client(client, nickname)
+        except Exception as e:
+            print(f"연결 상태 확인 중 오류: {e}")
+
+        # 1초마다 상태 체크
+        self.root.after(1000, self.check_connections)
+
 
 if __name__ == "__main__":
     server = DrawingServer()
+    server.start()
+
     server.start()

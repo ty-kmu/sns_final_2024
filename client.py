@@ -245,12 +245,24 @@ class DrawingClient:
             print(f"메시지 전송 오류: {e}")
 
     def on_closing(self):
-        # 창 종료시 처리
         try:
+            # 종료 메시지 전송
+            exit_data = {
+                'type': 'exit',
+                'nickname': self.nickname
+            }
+            self.send_data(exit_data)
+
+            # 소켓 종료
+            self.client.shutdown(socket.SHUT_RDWR)  # 송수신 모두 중단
             self.client.close()
+
+            # GUI 종료
             self.root.destroy()
         except Exception as e:
-            print(f"종료 오류: {e}")
+            print(f"종료 중 오류 발생: {e}")
+            # 오류가 발생하더라도 GUI는 종료
+            self.root.destroy()
 
 
 if __name__ == "__main__":
