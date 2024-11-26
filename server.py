@@ -95,7 +95,7 @@ class DrawingServer:
                 self.clients.remove(client)
                 self.nicknames.remove(nickname)
 
-                self.root.after_idle(self.update_tree(nickname))
+                self.root.after(0, self.update_tree(nickname))
 
                 # 퇴장 메시지 브로드캐스트
                 exit_message = {
@@ -128,7 +128,7 @@ class DrawingServer:
                     break
 
                 # 다른 메시지 처리...
-                self.broadcast(message.encode('utf-8'))
+                self.broadcast(message.encode('utf-8'), client)
 
             except json.JSONDecodeError:
                 print(f"JSON 디코딩 오류: {message}")
