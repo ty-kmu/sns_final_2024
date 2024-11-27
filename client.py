@@ -5,9 +5,104 @@ import json
 import queue
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QPushButton, QLineEdit, QTextEdit,
-                             QLabel, QColorDialog, QInputDialog, QMessageBox)
-from PyQt5.QtGui import QPainter, QPen, QColor
-from PyQt5.QtCore import Qt, QPoint, pyqtSignal, QEvent, QCoreApplication
+                             QLabel, QColorDialog, QInputDialog, QMessageBox,
+                             QListView, QStyledItemDelegate)
+from PyQt5.QtGui import QPainter, QPen, QColor, QTextDocument, QTextOption
+from PyQt5.QtCore import Qt, QPoint, pyqtSignal, QEvent, QCoreApplication, QSize, QMargins, QAbstractListModel
+
+USER_ME = 0  # 자신의 메시지
+USER_THEM = 1  # 상대방의 메시지
+
+BUBBLE_COLORS = {USER_ME: "#DCF8C6", USER_THEM: "#E8E8E8"}  # 말풍선 색상
+USER_TRANSLATE = {USER_ME: QPoint(20, 0), USER_THEM: QPoint(0, 0)}  # 말풍선 위치 조정
+
+BUBBLE_PADDING = QMargins(10, 5, 20, 5)
+TEXT_PADDING = QMargins(25, 15, 45, 15)
+
+
+class MessageDelegate(QStyledItemDelegate):
+    def paint(self, painter, option, index):
+        painter.save()
+        user, text, msg_type = index.model().data(index, Qt.DisplayRole)
+
+        # join/exit 메시지는 중앙 정렬된 일반 텍스트로 표시
+        if msg_type == 'join_exit':
+            painter.setPen(Qt.gray)  # 회색 텍스트
+            font = painter.font()
+            font.setPointSize(12)  # 폰트 크기 조절
+            painter.setFont(font)
+
+            textrect = option.rect
+            painter.drawText(textrect, Qt.AlignCenter, text)
+            painter.restore()
+            return
+
+        # 일반 채팅 메시지는 기존 말풍선 스타일로 표시
+        trans = USER_TRANSLATE[user]
+        painter.translate(trans)
+
+        bubblerect = option.rect.marginsRemoved(BUBBLE_PADDING)
+        textrect = option.rect.marginsRemoved(TEXT_PADDING)
+
+        painter.setPen(Qt.NoPen)
+        color = QColor(BUBBLE_COLORS[user])
+        painter.setBrush(color)
+        painter.drawRoundedRect(bubblerect, 15, 15)
+
+        painter.setPen(Qt.black)
+        toption = QTextOption()
+        toption.setWrapMode(QTextOption.WrapAtWordBoundaryOrAnywhere)
+
+        doc = QTextDocument()
+        doc.setDefaultTextOption(toption)
+        doc.setHtml(f'<span style="color: black;">{text}</span>')
+        doc.setTextWidth(textrect.width())
+        doc.setDocumentMargin(0)
+
+        painter.translate(textrect.topLeft())
+        doc.drawContents(painter)
+        painter.restore()
+
+    def sizeHint(self, option, index):
+        _, text, msg_type = index.model().data(index, Qt.DisplayRole)
+
+        # join/exit 메시지는 더 작은 높이로 설정
+        if msg_type == 'join_exit':
+            return QSize(option.rect.width(), 30)
+
+        # 일반 채팅 메시지는 기존 크기 계산 방식 사용
+        textrect = option.rect.marginsRemoved(TEXT_PADDING)
+
+        toption = QTextOption()
+        toption.setWrapMode(QTextOption.WrapAtWordBoundaryOrAnywhere)
+
+        doc = QTextDocument()
+        doc.setDefaultTextOption(toption)
+        doc.setHtml(f'<span style="color: black;">{text}</span>')
+        doc.setTextWidth(textrect.width())
+        doc.setDocumentMargin(0)
+
+        textrect.setHeight(int(doc.size().height()))
+        textrect = textrect.marginsAdded(TEXT_PADDING)
+        return textrect.size()
+
+
+class MessageModel(QAbstractListModel):
+    def __init__(self):
+        super().__init__()
+        self.messages = []
+
+    def data(self, index, role):
+        if role == Qt.DisplayRole:
+            return self.messages[index.row()]
+
+    def rowCount(self, index):
+        return len(self.messages)
+
+    def add_message(self, who, text, msg_type='chat'):
+        if text:
+            self.messages.append((who, text, msg_type))
+            self.layoutChanged.emit()
 
 
 class CustomEvent(QEvent):
@@ -154,14 +249,19 @@ class DrawingClient(QMainWindow):
         right_frame = QWidget()
         right_layout = QVBoxLayout(right_frame)
 
-        self.chat_box = QTextEdit()
-        self.chat_box.setReadOnly(True)
-        # 채팅창 스타일 설정
+        self.chat_box = QListView()
+        self.chat_box.setItemDelegate(MessageDelegate())
+        self.message_model = MessageModel()
+        self.chat_box.setModel(self.message_model)
+        self.chat_box.setSpacing(2)  # 메시지 간 간격 설정
+
+        # 스타일 설정
         self.chat_box.setStyleSheet("""
-            QTextEdit {
+            QListView {
                 border: 1px solid #ccc;
                 border-radius: 5px;
-                padding: 10px;
+                padding: 5px;
+                background: white;
             }
         """)
         right_layout.addWidget(self.chat_box)
@@ -309,42 +409,20 @@ class DrawingClient(QMainWindow):
         QCoreApplication.instance().quit()
 
     def display_chat_message(self, message, type):
-        cursor = self.chat_box.textCursor()
-
         if type == 'join_exit':
-            html = f'''<div style="text-align: center; color: #888; margin: 5px;">
-            {message}</div><div></div><br>'''
+            self.message_model.add_message(USER_THEM, message, 'join_exit')
         else:
             if ':' in message:
                 nickname, content = message.split(':', 1)
                 is_my_message = nickname.strip() == self.nickname
+                who = USER_ME if is_my_message else USER_THEM
             else:
-                is_my_message = False
+                who = USER_THEM
                 content = message
 
-            # margin을 사용하여 말풍선 위치 조정
-            margin_style = 'justify-content: flex-start;' if is_my_message else 'justify-content: flex-end;'
-            bg_color = '#DCF8C6' if is_my_message else '#E8E8E8'
+            self.message_model.add_message(who, message, 'chat')
 
-            html = f'''
-                <div style="display: flex; {margin_style}; width: 100%;">
-                    <span style="background: {bg_color};
-                                padding: 8px 12px;
-                                border-radius: 15px;
-                                display: inline-block;
-                                color: black;
-                                word-wrap: break-word;">
-                        {message}
-                    </span>
-                </div><br>
-            '''
-        cursor.movePosition(cursor.End)
-        cursor.insertHtml(html)
-
-        # 스크롤을 항상 최신 메시지로 이동
-        self.chat_box.verticalScrollBar().setValue(
-            self.chat_box.verticalScrollBar().maximum()
-        )
+        self.chat_box.scrollToBottom()
 
 
 if __name__ == '__main__':
