@@ -416,11 +416,12 @@ class DrawingClient(QMainWindow):
                 nickname, content = message.split(':', 1)
                 is_my_message = nickname.strip() == self.nickname
                 who = USER_ME if is_my_message else USER_THEM
+                content = content if is_my_message else message
             else:
                 who = USER_THEM
                 content = message
 
-            self.message_model.add_message(who, message, 'chat')
+            self.message_model.add_message(who, content, 'chat')
 
         self.chat_box.scrollToBottom()
 
