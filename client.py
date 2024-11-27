@@ -5,9 +5,9 @@ import json
 import queue
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QPushButton, QLineEdit, QTextEdit,
-                             QLabel, QColorDialog, QInputDialog)
+                             QLabel, QColorDialog, QInputDialog, QMessageBox)
 from PyQt5.QtGui import QPainter, QPen, QColor
-from PyQt5.QtCore import Qt, QPoint, pyqtSignal, QThread, QEvent
+from PyQt5.QtCore import Qt, QPoint, pyqtSignal, QEvent, QCoreApplication
 
 
 class CustomEvent(QEvent):
@@ -197,8 +197,10 @@ class DrawingClient(QMainWindow):
             self.network_thread.start()
 
         except Exception as e:
+            self.handle_received_message(
+                {'type': 'err', 'message': '서버 실행 여부를 확인하세요.'})
             self.handle_error(str(e))
-            sys.exit()
+            # sys.exit()
 
     def receive(self):
         buffer = ""
@@ -231,6 +233,11 @@ class DrawingClient(QMainWindow):
                 break
 
         print("수신 스레드가 종료되었습니다.")
+        # 프로그램 종료 알림
+        self.handle_received_message(
+            {'type': 'err', 'message': '서버와의 연결이 끊어졌습니다.'})
+
+        # sys.exit()
 
     def handle_received_message(self, data):
         """메인 스레드에서 안전하게 UI 업데이트"""
@@ -292,8 +299,14 @@ class DrawingClient(QMainWindow):
                 self.canvas.clear()
             elif data['type'] == 'join_exit':
                 self.display_chat_message(data['message'], data['type'])
+            elif data['type'] == 'err':
+                self.show_error_message(data['message'])
             return True
         return super().event(event)
+
+    def show_error_message(self, message):
+        QMessageBox.warning(self, '오류', message)
+        QCoreApplication.instance().quit()
 
     def display_chat_message(self, message, type):
         cursor = self.chat_box.textCursor()
