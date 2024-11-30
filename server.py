@@ -4,7 +4,7 @@ import threading
 import json
 from datetime import datetime
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
-                             QHBoxLayout, QLabel, QTreeWidget, QTreeWidgetItem)
+                             QHBoxLayout, QLabel, QTreeWidget, QTreeWidgetItem, QTextEdit)
 from PyQt5.QtCore import Qt, QMetaObject, Q_ARG, Qt, pyqtSlot
 from PyQt5.QtCore import QTimer
 
@@ -37,6 +37,11 @@ class ServerWindow(QMainWindow):
         self.tree.setColumnWidth(1, 200)
         self.tree.setColumnWidth(2, 100)
         layout.addWidget(self.tree)
+
+        self.info = QTextEdit()
+        self.info.setReadOnly(True)
+        self.info.append(f"서버 로컬 IP 주소: {self.get_internal_ip()}")
+        layout.addWidget(self.info)
 
     def setupServer(self):
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -185,6 +190,19 @@ class ServerWindow(QMainWindow):
             pass
 
         event.accept()
+
+    def get_internal_ip(self):
+        try:
+            # 소켓을 생성하고 외부 사이트(예: Google DNS 서버)에 연결 시도
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            # 소켓에 바인딩된 IP 주소 가져오기
+            internal_ip = s.getsockname()[0]
+            s.close()
+            return internal_ip
+        except OSError as e:
+            print(f"내부 IP를 가져오는 중 오류가 발생했습니다: {e}")
+            return None
 
     def handle_client(self, client, nickname):
         """클라이언트의 메시지를 처리하는 메서드"""
