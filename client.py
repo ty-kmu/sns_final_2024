@@ -106,7 +106,7 @@ class MessageModel(QAbstractListModel):
 
 
 class CustomEvent(QEvent):
-    """커스텀 이벤트 클래스"""
+    # 커스텀 이벤트 클래스
     EVENT_TYPE = QEvent.Type(QEvent.registerEventType())
 
     def __init__(self, data):
@@ -183,7 +183,7 @@ class DrawingCanvas(QWidget):
         self.update()
 
     def draw_remote_line(self, data):
-        """원격 클라이언트의 선 그리기"""
+        # 원격 클라이언트의 선 그리기
         start = QPoint(data['x1'], data['y1'])
         end = QPoint(data['x2'], data['y2'])
         color = QColor(data['color'])
@@ -210,7 +210,7 @@ class DrawingClient(QMainWindow):
         self.setupNetwork()
 
     def get_nickname(self):
-        """닉네임 입력 대화상자"""
+        # 닉네임 입력 대화상자
         nickname, ok = QInputDialog.getText(None, '닉네임', '닉네임을 입력하세요:')
         if ok and nickname.strip():
             return nickname.strip()
@@ -300,7 +300,6 @@ class DrawingClient(QMainWindow):
             self.handle_received_message(
                 {'type': 'err', 'message': '서버 실행 여부를 확인하세요.'})
             self.handle_error(str(e))
-            # sys.exit()
 
     def receive(self):
         buffer = ""
@@ -340,18 +339,18 @@ class DrawingClient(QMainWindow):
         # sys.exit()
 
     def handle_received_message(self, data):
-        """메인 스레드에서 안전하게 UI 업데이트"""
+        # 메인 스레드에서 안전하게 UI 업데이트
         QApplication.instance().postEvent(self, CustomEvent(data))
 
     def send_data(self, data):
-        """서버로 데이터를 전송하는 메서드"""
+        # 서버로 데이터를 전송하는 메서드
         try:
             self.client.send(json.dumps(data).encode('utf-8'))
         except Exception as e:
             print(f"전송 오류: {e}")
 
     def send_message(self):
-        """채팅 메시지를 전송하는 메서드"""
+        # 채팅 메시지를 전송하는 메서드
         message = self.msg_input.text().strip()
         if message:
             data = {
@@ -375,7 +374,7 @@ class DrawingClient(QMainWindow):
         print(f"오류 발생: {error_msg}")
 
     def closeEvent(self, event):
-        """프로그램 종료 시 처리"""
+        # 프로그램 종료 시 처리
         try:
             exit_data = {
                 'type': 'exit',
@@ -388,7 +387,7 @@ class DrawingClient(QMainWindow):
         event.accept()
 
     def event(self, event):
-        """커스텀 이벤트 처리"""
+        # 커스텀 이벤트 처리
         if event.type() == CustomEvent.EVENT_TYPE:
             data = event.data
             if data['type'] == 'line':

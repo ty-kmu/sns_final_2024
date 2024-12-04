@@ -55,12 +55,12 @@ class ServerWindow(QMainWindow):
         accept_thread.start()
 
     def update_client_count(self):
-        """접속자 수 업데이트"""
+        # 접속자 수 업데이트
         self.count_label.setText(f"현재 접속자 수: {len(self.clients)}명")
 
     @pyqtSlot(str)
     def add_client_to_tree_slot(self, nickname):
-        """클라이언트를 트리에 추가하는 슬롯"""
+        # 클라이언트를 트리에 추가하는 슬롯
         try:
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             item = QTreeWidgetItem([nickname, current_time, "연결됨"])
@@ -71,7 +71,7 @@ class ServerWindow(QMainWindow):
 
     @pyqtSlot(str)
     def remove_client_slot(self, nickname):
-        """클라이언트를 트리에서 제거하는 슬롯"""
+        # 클라이언트를 트리에서 제거하는 슬롯
         try:
             for i in range(self.tree.topLevelItemCount()):
                 item = self.tree.topLevelItem(i)
@@ -85,7 +85,7 @@ class ServerWindow(QMainWindow):
             print(f"트리 제거 중 오류: {e}")
 
     def delayed_remove(self, index):
-        """지연된 트리 항목 제거"""
+        # 지연된 트리 항목 제거
         try:
             self.tree.takeTopLevelItem(index)
             self.update_client_count()
@@ -205,7 +205,7 @@ class ServerWindow(QMainWindow):
             return None
 
     def handle_client(self, client, nickname):
-        """클라이언트의 메시지를 처리하는 메서드"""
+        # 클라이언트의 메시지를 처리하는 메서드
         while True:
             try:
                 message = client.recv(1024).decode('utf-8')
