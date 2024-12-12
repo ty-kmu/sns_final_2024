@@ -1,3 +1,4 @@
+import os
 import sys
 import socket
 import threading
@@ -7,7 +8,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QPushButton, QLineEdit, QTextEdit,
                              QLabel, QColorDialog, QInputDialog, QMessageBox,
                              QListView, QStyledItemDelegate)
-from PyQt5.QtGui import QPainter, QPen, QColor, QTextDocument, QTextOption
+from PyQt5.QtGui import QPainter, QPen, QColor, QTextDocument, QTextOption, QPixmap
 from PyQt5.QtCore import Qt, QPoint, pyqtSignal, QEvent, QCoreApplication, QSize, QMargins, QAbstractListModel
 
 USER_ME = 0  # 자신의 메시지
@@ -122,6 +123,7 @@ class DrawingCanvas(QWidget):
         self.last_point = None
         self.current_color = QColor(Qt.black)
         self.line_width = 2
+        self.drawing_mode = 'pen'  # 'pen' 또는 'eraser' 모드
         self.setMinimumSize(600, 400)
         self.setStyleSheet("background-color: white;")
         self.lines = []
@@ -134,12 +136,16 @@ class DrawingCanvas(QWidget):
         if event.buttons() & Qt.LeftButton and self.last_point:
             current_point = event.pos()
 
+            # 그리기/지우기 모드에 따라 색상 설정
+            color = QColor(
+                Qt.white) if self.drawing_mode == 'eraser' else self.current_color
+
             # 선 정보 저장
             line = {
                 'start': self.last_point,
                 'end': current_point,
-                'color': self.current_color,
-                'width': self.line_width
+                'color': color,
+                'width': 10 if self.drawing_mode == 'eraser' else self.line_width
             }
             self.lines.append(line)
 
@@ -150,13 +156,14 @@ class DrawingCanvas(QWidget):
                 'y1': self.last_point.y(),
                 'x2': current_point.x(),
                 'y2': current_point.y(),
-                'color': self.current_color.name(),
-                'width': self.line_width
+                'color': color.name(),
+                'width': 10 if self.drawing_mode == 'eraser' else self.line_width,
+                'mode': self.drawing_mode
             }
             self.line_drawn.emit(data)
 
             self.last_point = current_point
-            self.update()  # paintEvent 호출
+            self.update()
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -188,12 +195,14 @@ class DrawingCanvas(QWidget):
         end = QPoint(data['x2'], data['y2'])
         color = QColor(data['color'])
         width = data['width']
+        mode = data.get('mode', 'pen')  # 모드 정보 추가
 
         line = {
             'start': start,
             'end': end,
             'color': color,
-            'width': width
+            'width': width,
+            'mode': mode
         }
         self.lines.append(line)
         self.update()
@@ -218,12 +227,23 @@ class DrawingClient(QMainWindow):
 
     def initUI(self):
         self.setWindowTitle('그림판 & 채팅')
-        self.setGeometry(100, 100, 900, 600)
+        self.setGeometry(100, 100, 1000, 600)
 
         # 메인 위젯과 레이아웃
         main_widget = QWidget()
         self.setCentralWidget(main_widget)
-        layout = QHBoxLayout(main_widget)
+        layout = QVBoxLayout(main_widget)
+
+        # 상단 정보 라벨 추가
+        info_layout = QHBoxLayout()
+        self.info_label = QLabel(f'닉네임: {self.nickname} | 포트: ()')
+        self.info_label.setStyleSheet('font-weight: bold; padding-left: 10px;')
+        info_layout.addWidget(self.info_label)
+        layout.addLayout(info_layout)
+
+        # 하위 레이아웃 생성
+        content_layout = QHBoxLayout()
+        layout.addLayout(content_layout)
 
         # 왼쪽 프레임 (그림판)
         left_frame = QWidget()
@@ -236,13 +256,83 @@ class DrawingClient(QMainWindow):
 
         # 도구 버튼들
         tool_layout = QHBoxLayout()
-        self.color_btn = QPushButton('색상 선택')
-        self.color_btn.clicked.connect(self.choose_color)
-        self.clear_btn = QPushButton('지우기')
+
+        self.clear_btn = QPushButton('전체 지우기')
         self.clear_btn.clicked.connect(self.clear_canvas)
 
-        tool_layout.addWidget(self.color_btn)
+        # 자주 사용하는 색상 버튼들 추가
+        preset_colors = [
+            QColor(Qt.black),     # 검정
+            QColor(Qt.red),       # 빨강
+            QColor(Qt.blue),      # 파랑
+            QColor(Qt.green),     # 초록
+            QColor(Qt.yellow),    # 노랑
+            QColor(Qt.magenta),   # 자홍
+            QColor(Qt.cyan),      # 청록
+            QColor(Qt.white),     # 흰색
+            QColor(255, 128, 0),  # 주황
+            QColor(128, 0, 128)   # 보라
+        ]
+
+        self.color_buttons = []
+        for color in preset_colors:
+            btn = QPushButton()
+            btn.setFixedSize(30, 30)
+
+            # 검정색 버튼에는 파란 테두리 추가
+            if color == QColor(Qt.black):
+                btn.setStyleSheet(f"""
+                    background-color: {color.name()};
+                    border: 3px solid blue;
+                """)
+            else:
+                btn.setStyleSheet(f"""
+                    background-color: {color.name()};
+                    border: 1px solid gray;
+                """)
+
+            btn.clicked.connect(lambda checked, c=color,
+                                b=btn: self.set_preset_color(c, b))
+            self.color_buttons.append(btn)
+
+        # 색상 선택 버튼도 동일한 스타일로 변경
+        self.color_btn = QPushButton()
+        self.color_btn.setFixedSize(30, 30)
+        self.color_btn.setStyleSheet(
+            "background-color: black; border: 1px solid gray;")
+        self.color_btn.clicked.connect(self.choose_color)
+
+        # 색상 선택 아이콘 레이블 생성
+        self.color_icon_label = QLabel(self.color_btn)
+        self.color_icon_label.setAlignment(Qt.AlignCenter)
+        # 아이콘 크기 및 위치 조정
+        icon_pixmap = QPixmap(os.path.join(os.path.dirname(
+            __file__), 'icons', 'ic_more.png'))  # 아이콘 경로 지정
+        scaled_icon = icon_pixmap.scaled(
+            20, 20,  # 아이콘 크기
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation
+        )
+        self.color_icon_label.setPixmap(scaled_icon)
+        self.color_icon_label.setGeometry(
+            5, 5,  # 위치 조정
+            20, 20  # 크기
+        )
+
         tool_layout.addWidget(self.clear_btn)
+
+        # 프리셋 색상 버튼들 추가
+        for btn in self.color_buttons:
+            tool_layout.addWidget(btn)
+
+        tool_layout.addWidget(self.color_btn)
+
+        # 펜/지우개 모드 전환 버튼 추가
+        self.mode_btn = QPushButton('지우개')
+        self.mode_btn.setFixedSize(60, 30)  # 버튼 크기 고정
+        self.mode_btn.clicked.connect(self.toggle_drawing_mode)
+        tool_layout.addWidget(self.mode_btn)
+
         left_layout.addLayout(tool_layout)
 
         # 오른쪽 프레임 (채팅)
@@ -278,13 +368,20 @@ class DrawingClient(QMainWindow):
         right_layout.addLayout(msg_layout)
 
         # 메인 레이아웃에 추가
-        layout.addWidget(left_frame, stretch=2)
-        layout.addWidget(right_frame, stretch=1)
+        content_layout.addWidget(left_frame, stretch=2)
+        content_layout.addWidget(right_frame, stretch=1)
 
     def setupNetwork(self):
         try:
+            # 포트 번호를 0으로 설정하여 운영체제가 임의의 포트를 할당하도록 함
             self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.client.connect(('localhost', 3000))
+
+            # 서버에서 할당된 포트 번호 가져오기
+            local_port = self.client.getsockname()[1]
+
+            # 정보 라벨 업데이트
+            self.info_label.setText(f'닉네임: {self.nickname} | 포트: {local_port}')
 
             # 닉네임 처리
             response = self.client.recv(1024).decode('utf-8')
@@ -363,6 +460,19 @@ class DrawingClient(QMainWindow):
     def choose_color(self):
         color = QColorDialog.getColor()
         if color.isValid():
+            # 모든 버튼의 테두리 초기화
+            for btn in self.color_buttons:
+                btn.setStyleSheet(f"""
+                    background-color: {btn.palette().color(btn.backgroundRole()).name()};
+                    border: 1px solid gray;
+                """)
+
+            # 색상 선택 버튼에 강조 테두리 추가
+            self.color_btn.setStyleSheet(f"""
+                background-color: {color.name()};
+                border: 3px solid blue;
+            """)
+
             self.canvas.current_color = color
 
     def clear_canvas(self):
@@ -391,6 +501,8 @@ class DrawingClient(QMainWindow):
         if event.type() == CustomEvent.EVENT_TYPE:
             data = event.data
             if data['type'] == 'line':
+                # 모드 정보 추가
+                data['mode'] = data.get('mode', 'pen')
                 self.canvas.draw_remote_line(data)
             elif data['type'] == 'chat':
                 self.display_chat_message(data['message'], data['type'])
@@ -423,6 +535,31 @@ class DrawingClient(QMainWindow):
             self.message_model.add_message(who, content, 'chat')
 
         self.chat_box.scrollToBottom()
+
+    def set_preset_color(self, color, button):
+        # 모든 버튼의 테두리 초기화
+        for btn in self.color_buttons:
+            btn.setStyleSheet(f"""
+                background-color: {btn.palette().color(btn.backgroundRole()).name()};
+                border: 1px solid gray;
+            """)
+
+        # 선택된 버튼에 강조 테두리 추가
+        button.setStyleSheet(f"""
+            background-color: {color.name()};
+            border: 3px solid blue;
+        """)
+
+        # 캔버스 색상 변경
+        self.canvas.current_color = color
+
+    def toggle_drawing_mode(self):
+        if self.canvas.drawing_mode == 'pen':
+            self.canvas.drawing_mode = 'eraser'
+            self.mode_btn.setText('펜')
+        else:
+            self.canvas.drawing_mode = 'pen'
+            self.mode_btn.setText('지우개')
 
 
 if __name__ == '__main__':

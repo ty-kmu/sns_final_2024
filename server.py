@@ -2,9 +2,9 @@ import sys
 import socket
 import threading
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
-                             QHBoxLayout, QLabel, QTreeWidget, QTreeWidgetItem, QTextEdit)
+                             QHBoxLayout, QLabel, QTreeWidget, QTreeWidgetItem, QTextEdit, QMenu, QAction, QPushButton)
 from PyQt5.QtCore import Qt, QMetaObject, Q_ARG, Qt, pyqtSlot
 from PyQt5.QtCore import QTimer
 
@@ -14,12 +14,24 @@ class ServerWindow(QMainWindow):
         super().__init__()
         self.clients = []
         self.nicknames = []
+        self.client_connect_times = {}
+        self.ip_toggle_state = False  # IP 표시 상태 추적
         self.initUI()
         self.setupServer()
 
+        # 경과 시간 업데이트를 위한 타이머 설정
+        self.elapsed_time_timer = QTimer()
+        self.elapsed_time_timer.timeout.connect(self.update_elapsed_times)
+        self.elapsed_time_timer.start(1000)  # 1초마다 업데이트
+
+        # 트리 위젯에 컨텍스트 메뉴 설정
+        self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tree.customContextMenuRequested.connect(
+            self.show_tree_context_menu)
+
     def initUI(self):
         self.setWindowTitle('그림판 & 채팅 서버')
-        self.setGeometry(100, 100, 600, 400)
+        self.setGeometry(100, 100, 700, 500)
 
         # 메인 위젯과 레이아웃
         main_widget = QWidget()
@@ -32,16 +44,29 @@ class ServerWindow(QMainWindow):
 
         # 트리 위젯 설정
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(['닉네임', '접속시간', '상태'])
+        self.tree.setHeaderLabels(['닉네임', '접속시간', '포트', '경과시간', '상태'])
         self.tree.setColumnWidth(0, 150)
         self.tree.setColumnWidth(1, 200)
         self.tree.setColumnWidth(2, 100)
+        self.tree.setColumnWidth(3, 100)
+        self.tree.setColumnWidth(4, 100)
         layout.addWidget(self.tree)
 
-        self.info = QTextEdit()
-        self.info.setReadOnly(True)
-        self.info.append(f"서버 로컬 IP 주소: {self.get_internal_ip()}")
-        layout.addWidget(self.info)
+        # IP 주소 레이아웃 추가
+        ip_layout = QHBoxLayout()
+        self.ip_label = QLabel(f"서버 로컬 IP 주소: {self.get_internal_ip()}")
+        self.ip_toggle_button = QPushButton("IP 형식 변환")
+        self.ip_toggle_button.clicked.connect(self.toggle_ip_format)
+
+        # 서버 종료 버튼 추가
+        self.server_shutdown_button = QPushButton("서버 종료")
+        self.server_shutdown_button.clicked.connect(self.shutdown_server)
+
+        ip_layout.addWidget(self.ip_label)
+        ip_layout.addWidget(self.ip_toggle_button)
+        ip_layout.addWidget(self.server_shutdown_button)  # 버튼 추가
+
+        layout.addLayout(ip_layout)
 
     def setupServer(self):
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -58,12 +83,22 @@ class ServerWindow(QMainWindow):
         # 접속자 수 업데이트
         self.count_label.setText(f"현재 접속자 수: {len(self.clients)}명")
 
-    @pyqtSlot(str)
-    def add_client_to_tree_slot(self, nickname):
-        # 클라이언트를 트리에 추가하는 슬롯
+    @pyqtSlot(str, int)
+    def add_client_to_tree_slot(self, nickname, port):
         try:
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            item = QTreeWidgetItem([nickname, current_time, "연결됨"])
+            connect_time = datetime.now()
+
+            # 클라이언트 접속 시간 저장
+            self.client_connect_times[nickname] = connect_time
+
+            item = QTreeWidgetItem([
+                nickname,
+                current_time,
+                str(port),
+                "0초",
+                "연결됨"
+            ])
             self.tree.addTopLevelItem(item)
             self.update_client_count()
         except Exception as e:
@@ -71,12 +106,16 @@ class ServerWindow(QMainWindow):
 
     @pyqtSlot(str)
     def remove_client_slot(self, nickname):
-        # 클라이언트를 트리에서 제거하는 슬롯
         try:
             for i in range(self.tree.topLevelItemCount()):
                 item = self.tree.topLevelItem(i)
                 if item.text(0) == nickname:
-                    item.setText(2, "종료됨")
+                    item.setText(4, "종료됨")  # 상태 컬럼 인덱스 변경
+
+                    # 클라이언트 접속 시간 제거
+                    if nickname in self.client_connect_times:
+                        del self.client_connect_times[nickname]
+
                     # 2초 후에 항목 삭제하고 카운트 업데이트
                     QTimer.singleShot(2000, lambda: self.delayed_remove(i))
                     break
@@ -144,11 +183,12 @@ class ServerWindow(QMainWindow):
                 self.clients.append(client)
                 self.nicknames.append(nickname)
 
-                # GUI 업데이트
+                # GUI 업데이트 (포트 번호 추가)
                 QMetaObject.invokeMethod(self,
                                          "add_client_to_tree_slot",
                                          Qt.QueuedConnection,
-                                         Q_ARG(str, nickname))
+                                         Q_ARG(str, nickname),
+                                         Q_ARG(int, address[1]))  # 포트 번호 전달
 
                 # 입장 메시지 브로드캐스트
                 join_message = {
@@ -176,14 +216,16 @@ class ServerWindow(QMainWindow):
                     pass
 
     def closeEvent(self, event):
-        # 모든 클라이언트 연결 종료
+        # 타이머 중지
+        self.elapsed_time_timer.stop()
+
+        # 기존 클로즈 이벤트 로직
         for client in self.clients:
             try:
                 client.close()
             except:
                 pass
 
-        # 서버 소켓 종료
         try:
             self.server.close()
         except:
@@ -193,16 +235,40 @@ class ServerWindow(QMainWindow):
 
     def get_internal_ip(self):
         try:
-            # 소켓을 생성하고 외부 사이트(예: Google DNS 서버)에 연결 시도
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.connect(("8.8.8.8", 80))
-            # 소켓에 바인딩된 IP 주소 가져오기
             internal_ip = s.getsockname()[0]
             s.close()
             return internal_ip
         except OSError as e:
             print(f"내부 IP를 가져오는 중 오류가 발생했습니다: {e}")
             return None
+
+    def toggle_ip_format(self):
+        try:
+            current_ip = self.ip_label.text().split(": ")[-1]
+
+            if not hasattr(self, 'converted_ip'):
+                # 처음 변환 시
+                packed_ip = socket.inet_aton(current_ip)
+                self.converted_ip = int.from_bytes(packed_ip, byteorder='big')
+                self.ip_label.setText(f"서버 로컬 IP 주소(숫자): {self.converted_ip}")
+            elif not self.ip_toggle_state:
+                # 숫자에서 IP로 변환
+                packed_ip = self.converted_ip.to_bytes(4, byteorder='big')
+                restored_ip = socket.inet_ntoa(packed_ip)
+                self.ip_label.setText(f"서버 로컬 IP 주소: {restored_ip}")
+            else:
+                # IP에서 숫자로 변환
+                packed_ip = socket.inet_aton(current_ip)
+                self.converted_ip = int.from_bytes(packed_ip, byteorder='big')
+                self.ip_label.setText(f"서버 로컬 IP 주소(숫자): {self.converted_ip}")
+
+            # 상태 토글
+            self.ip_toggle_state = not self.ip_toggle_state
+
+        except Exception as e:
+            print(f"IP 변환 중 오류: {e}")
 
     def handle_client(self, client, nickname):
         # 클라이언트의 메시지를 처리하는 메서드
@@ -226,6 +292,80 @@ class ServerWindow(QMainWindow):
 
         # 연결이 끊어진 경우 클라이언트 제거
         self.remove_client(client, nickname)
+
+    def update_elapsed_times(self):
+        # 모든 클라이언트의 경과 시간 업데이트
+        for i in range(self.tree.topLevelItemCount()):
+            item = self.tree.topLevelItem(i)
+            nickname = item.text(0)
+
+            if nickname in self.client_connect_times:
+                connect_time = self.client_connect_times[nickname]
+                elapsed_time = datetime.now() - connect_time
+
+                # hh:mm:ss 형식으로 포맷팅
+                hours, remainder = divmod(
+                    int(elapsed_time.total_seconds()), 3600)
+                minutes, seconds = divmod(remainder, 60)
+
+                elapsed_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+                item.setText(3, elapsed_str)
+
+    def show_tree_context_menu(self, pos):
+        # 트리 위젯에서 우클릭 시 컨텍스트 메뉴 표시
+        item = self.tree.itemAt(pos)
+        if item:
+            context_menu = QMenu(self)
+            disconnect_action = QAction("연결 끊기", self)
+            disconnect_action.triggered.connect(
+                lambda: self.disconnect_client(item))
+            context_menu.addAction(disconnect_action)
+            context_menu.exec_(self.tree.mapToGlobal(pos))
+
+    def disconnect_client(self, tree_item):
+        # 특정 클라이언트 연결 끊기
+        try:
+            nickname = tree_item.text(0)
+
+            # 해당 닉네임을 가진 클라이언트 찾기
+            for client in self.clients[:]:  # 복사본으로 순회
+                client_index = self.clients.index(client)
+                if self.nicknames[client_index] == nickname:
+                    # 클라이언트 제거 메서드 호출
+                    self.remove_client(client, nickname)
+                    break
+        except Exception as e:
+            print(f"클라이언트 연결 끊기 중 오류: {e}")
+
+    def shutdown_server(self):
+        try:
+            # 모든 클라이언트 연결 종료
+            for client in self.clients[:]:
+                try:
+                    # 클라이언트에게 서버 종료 메시지 전송
+                    shutdown_message = {
+                        'type': 'server_shutdown',
+                        'message': '서버가 종료됩니다.'
+                    }
+                    client.send(json.dumps(shutdown_message).encode('utf-8'))
+                    client.close()
+                except Exception as e:
+                    print(f"클라이언트 연결 종료 중 오류: {e}")
+
+            # 서버 소켓 종료
+            if hasattr(self, 'server'):
+                self.server.close()
+
+            # 타이머 중지
+            if hasattr(self, 'elapsed_time_timer'):
+                self.elapsed_time_timer.stop()
+
+            # 애플리케이션 종료
+            QApplication.quit()
+
+        except Exception as e:
+            print(f"서버 종료 중 오류: {e}")
 
 
 if __name__ == '__main__':
