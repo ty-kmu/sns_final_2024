@@ -108,7 +108,7 @@ class MessageModel(QAbstractListModel):
 
 
 class CustomEvent(QEvent):
-    # 커스텀 이벤트 클래스
+    # 커스텀 이벤트 클래스 
     EVENT_TYPE = QEvent.Type(QEvent.registerEventType())
 
     def __init__(self, data):
