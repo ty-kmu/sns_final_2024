@@ -10,6 +10,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QListView, QStyledItemDelegate)
 from PyQt5.QtGui import QPainter, QPen, QColor, QTextDocument, QTextOption, QPixmap
 from PyQt5.QtCore import Qt, QPoint, pyqtSignal, QEvent, QCoreApplication, QSize, QMargins, QAbstractListModel
+import ssl
 
 USER_ME = 0  # 자신의 메시지
 USER_THEM = 1  # 상대방의 메시지
@@ -373,9 +374,17 @@ class DrawingClient(QMainWindow):
 
     def setupNetwork(self):
         try:
-            # 포트 번호를 0으로 설정하여 운영체제가 임의의 포트를 할당하도록 함
             self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.client.connect(('localhost', 3000))
+
+            # SSL 컨텍스트 생성
+            context = ssl.create_default_context()
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
+
+            # SSL 소켓으로 래핑
+            self.client = context.wrap_socket(
+                self.client, server_hostname='localhost')
 
             # 서버에서 할당된 포트 번호 가져오기
             local_port = self.client.getsockname()[1]

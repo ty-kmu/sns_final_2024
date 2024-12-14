@@ -2,6 +2,7 @@ import sys
 import socket
 import threading
 import json
+import ssl
 from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QLabel, QTreeWidget, QTreeWidgetItem, QTextEdit, QMenu, QAction, QPushButton)
@@ -73,6 +74,14 @@ class ServerWindow(QMainWindow):
         self.server.bind(('localhost', 3000))
         self.server.listen(5)
         print("서버가 시작되었습니다...")
+
+        # SSL 컨텍스트 생성
+        context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        context.load_cert_chain(
+            certfile='auth/certfile.pem', keyfile='auth/keyfile.pem')
+
+        # SSL 소켓으로 래핑
+        self.server = context.wrap_socket(self.server, server_side=True)
 
         # 연결 수락 스레드 시작
         accept_thread = threading.Thread(target=self.accept_connections)
