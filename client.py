@@ -379,8 +379,8 @@ class DrawingClient(QMainWindow):
 
             # SSL 컨텍스트 생성
             context = ssl.create_default_context()
-            context.check_hostname = False
-            context.verify_mode = ssl.CERT_NONE
+            context.check_hostname = False 
+            context.load_verify_locations("auth/certfile.pem")
 
             # SSL 소켓으로 래핑
             self.client = context.wrap_socket(
