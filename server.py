@@ -41,7 +41,12 @@ class ServerWindow(QMainWindow):
         # 트리 위젯 설정
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(['닉네임', '접속시간', '포트', '경과시간', '상태'])
-        self.layout.addWidget(self.tree)  # 트리 위젯 추가
+        self.tree.setColumnWidth(0, 150)
+        self.tree.setColumnWidth(1, 200)
+        self.tree.setColumnWidth(2, 100)
+        self.tree.setColumnWidth(3, 100)
+        self.tree.setColumnWidth(4, 100)
+        self.layout.addWidget(self.tree)
 
         # IP 주소 레이아웃 추가
         ip_layout = QHBoxLayout()
@@ -69,6 +74,11 @@ class ServerWindow(QMainWindow):
         main_widget.setLayout(self.layout)  # 메인 위젯에 레이아웃 설정
         self.setCentralWidget(main_widget)  # 중앙 위젯으로 설정
 
+        # 트리 위젯에 컨텍스트 메뉴 설정
+        self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tree.customContextMenuRequested.connect(
+            self.show_tree_context_menu)
+
         # 초기 netstat 결과 업데이트
         self.update_netstat()
 
@@ -76,14 +86,12 @@ class ServerWindow(QMainWindow):
         self.setWindowTitle('그림판 & 채팅 서버')
         self.setGeometry(100, 100, 700, 500)
 
-        # 메인 위젯과 레이아웃
-        main_widget = QWidget()
-        self.setCentralWidget(main_widget)
-        layout = QVBoxLayout(main_widget)
+        # 레이아웃 초기화
+        self.layout = QVBoxLayout()  # QVBoxLayout으로 초기화
 
         # 접속자 수 레이블
         self.count_label = QLabel('현재 접속자 수: 0명')
-        layout.addWidget(self.count_label)
+        self.layout.addWidget(self.count_label)
 
         # 트리 위젯 설정
         self.tree = QTreeWidget()
@@ -93,7 +101,7 @@ class ServerWindow(QMainWindow):
         self.tree.setColumnWidth(2, 100)
         self.tree.setColumnWidth(3, 100)
         self.tree.setColumnWidth(4, 100)
-        layout.addWidget(self.tree)
+        self.layout.addWidget(self.tree)
 
         # IP 주소 레이아웃 추가
         ip_layout = QHBoxLayout()
@@ -109,7 +117,25 @@ class ServerWindow(QMainWindow):
         ip_layout.addWidget(self.ip_toggle_button)
         ip_layout.addWidget(self.server_shutdown_button)  # 버튼 추가
 
-        layout.addLayout(ip_layout)
+        self.layout.addLayout(ip_layout)  # IP 레이아웃 추가
+
+        # 텍스트 박스 추가
+        self.netstat_textbox = QTextEdit(self)
+        self.netstat_textbox.setReadOnly(True)
+        self.layout.addWidget(self.netstat_textbox)  # 텍스트 박스 추가
+
+        # 메인 위젯 설정
+        main_widget = QWidget()
+        main_widget.setLayout(self.layout)  # 메인 위젯에 레이아웃 설정
+        self.setCentralWidget(main_widget)  # 중앙 위젯으로 설정
+
+        # 트리 위젯에 컨텍스트 메뉴 설정
+        self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tree.customContextMenuRequested.connect(
+            self.show_tree_context_menu)
+
+        # 초기 netstat 결과 업데이트
+        self.update_netstat()
 
     def setupServer(self):
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
