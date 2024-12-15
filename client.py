@@ -3,7 +3,6 @@ import sys
 import socket
 import threading
 import json
-import queue
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QPushButton, QLineEdit, QTextEdit,
                              QLabel, QColorDialog, QInputDialog, QMessageBox,

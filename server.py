@@ -3,7 +3,7 @@ import socket
 import threading
 import json
 import ssl
-from datetime import datetime, timedelta
+from datetime import datetime
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QLabel, QTreeWidget, QTreeWidgetItem, QTextEdit, QMenu, QAction, QPushButton)
 from PyQt5.QtCore import Qt, QMetaObject, Q_ARG, Qt, pyqtSlot
