@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QLabel, QTreeWidget, QTreeWidgetItem, QTextEdit, QMenu, QAction, QPushButton)
 from PyQt5.QtCore import Qt, QMetaObject, Q_ARG, Qt, pyqtSlot
 from PyQt5.QtCore import QTimer
+import subprocess
 
 
 class ServerWindow(QMainWindow):
@@ -29,6 +30,47 @@ class ServerWindow(QMainWindow):
         self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(
             self.show_tree_context_menu)
+
+        # 레이아웃 초기화
+        self.layout = QVBoxLayout()  # QVBoxLayout으로 초기화
+
+        # 접속자 수 레이블
+        self.count_label = QLabel('현재 접속자 수: 0명')
+        self.layout.addWidget(self.count_label)
+
+        # 트리 위젯 설정
+        self.tree = QTreeWidget()
+        self.tree.setHeaderLabels(['닉네임', '접속시간', '포트', '경과시간', '상태'])
+        self.layout.addWidget(self.tree)  # 트리 위젯 추가
+
+        # IP 주소 레이아웃 추가
+        ip_layout = QHBoxLayout()
+        self.ip_label = QLabel(f"서버 로컬 IP 주소: {self.get_internal_ip()}")
+        self.ip_toggle_button = QPushButton("IP 형식 변환")
+        self.ip_toggle_button.clicked.connect(self.toggle_ip_format)
+
+        # 서버 종료 버튼 추가
+        self.server_shutdown_button = QPushButton("서버 종료")
+        self.server_shutdown_button.clicked.connect(self.shutdown_server)
+
+        ip_layout.addWidget(self.ip_label)
+        ip_layout.addWidget(self.ip_toggle_button)
+        ip_layout.addWidget(self.server_shutdown_button)  # 버튼 추가
+
+        self.layout.addLayout(ip_layout)  # IP 레이아웃 추가
+
+        # 텍스트 박스 추가
+        self.netstat_textbox = QTextEdit(self)
+        self.netstat_textbox.setReadOnly(True)
+        self.layout.addWidget(self.netstat_textbox)  # 텍스트 박스 추가
+
+        # 메인 위젯 설정
+        main_widget = QWidget()
+        main_widget.setLayout(self.layout)  # 메인 위젯에 레이아웃 설정
+        self.setCentralWidget(main_widget)  # 중앙 위젯으로 설정
+
+        # 초기 netstat 결과 업데이트
+        self.update_netstat()
 
     def initUI(self):
         self.setWindowTitle('그림판 & 채팅 서버')
@@ -320,6 +362,19 @@ class ServerWindow(QMainWindow):
                 elapsed_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
                 item.setText(3, elapsed_str)
+
+        # 트리뷰 업데이트 후 netstat 결과 업데이트
+        self.update_netstat()
+
+    def update_netstat(self):
+        # netstat 명령 실행
+        result = subprocess.run(
+            ['netstat', '-an'], capture_output=True, text=True)
+        # 3000 포트 관련 결과 필터링
+        filtered_result = "\n".join(
+            [line for line in result.stdout.splitlines() if '3000' in line])
+        # 텍스트 박스에 결과 업데이트
+        self.netstat_textbox.setPlainText(filtered_result)
 
     def show_tree_context_menu(self, pos):
         # 트리 위젯에서 우클릭 시 컨텍스트 메뉴 표시
